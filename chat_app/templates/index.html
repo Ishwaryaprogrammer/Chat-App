@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="static/styles.css">
+    <title>Chat App</title>
+</head>
+<body>
+    <div id="chatContainer">
+        <div id="messages"></div>
+        <input id="messageInput" type="text" placeholder="Type a message..." required>
+        <input type="file" id="fileInput">
+        <button id="sendMessage">Send</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.1.1/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let username = '';
+        const correctPassword = '0000';  // Set the correct password here
+
+        // Request notification permission
+        Notification.requestPermission();
+
+        // Prompt for username and password
+        while (!username) {
+            username = prompt("Please enter your name:");
+            const password = prompt("Please enter the password:");
+
+            if (password !== correctPassword) {
+                alert("Incorrect password. Please try again.");
+                username = '';  // Reset username if password is incorrect
+            }
+        }
+        
+        // Emit join event with the username
+        socket.emit('join', username);
+        
+        // Handle new message
+        socket.on('message', function(data) {
+            // Only show messages from other users or system messages
+            if (data.username !== username) {
+                appendMessage(data.msg, data.username, false);
+                // Display notification for new message
+                showNotification(`${data.username}: ${data.msg}`);
+            }
+        });
+
+        // Handle user join
+        socket.on('update_users', function(users) {
+            console.log(users);  // Update user list if needed
+        });
+
+        // Send message
+        document.getElementById('sendMessage').onclick = function() {
+            const msg = document.getElementById('messageInput').value;
+            socket.emit('message', { msg: msg, username: username });
+            appendMessage(msg, username, true);
+            document.getElementById('messageInput').value = '';
+        };
+
+        // Handle file upload
+        document.getElementById('fileInput').onchange = function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const dataURL = e.target.result;
+                    const fileName = file.name;
+                    socket.emit('file_upload', { name: fileName, data: dataURL, username });  // Ensure username is sent
+                    // Removed file uploading message as per your requirement
+                };
+                reader.readAsDataURL(file);
+            }
+        };
+
+        socket.on('file_uploaded', function(data) {
+            const fileLink = `<a href="/uploads/${data.name}" target="_blank">${data.name}</a>`;  // Create a link for the file
+            appendMessage(`File received: ${fileLink}`, data.username, false);  // Show received file link
+            // Display notification for file upload
+            showNotification(`File received: ${data.username} sent ${data.name}`);
+        });
+
+        // Function to append message to chat
+        function appendMessage(msg, sender, isSender) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = isSender ? 'message sent' : 'message received';
+            messageDiv.innerHTML = `<strong>${sender}:</strong> ${msg}`;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to bottom
+        }
+
+        // Function to show notifications
+        function showNotification(message) {
+            if (Notification.permission === 'granted') {
+                new Notification('Chat Notification', {
+                    body: message,
+                    icon: 'static/icon.png'  // Optional: Add an icon
+                });
+            }
+        }
+    </script>
+</body>
+</html>
